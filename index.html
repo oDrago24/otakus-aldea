@@ -24,6 +24,7 @@
   ol { margin: 0; padding-left: 20px; }
   li { margin: 4px 0; }
   b.path { color: var(--accent); }
+  textarea:disabled { opacity: .5; }
   textarea { width: 100%; min-height: 150px; margin-top: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
              background: var(--bg); color: var(--text); font: 13px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
@@ -75,9 +76,15 @@
 <script>
   const API = "https://yxfgxgndropdcmejqhan.supabase.co/functions/v1/aldea";
   const $ = (id) => document.getElementById(id);
+  // Enlace personal que da /aldea en el Discord del clan (caduca en 30 min). Sin él la página no analiza nada.
+  const token = new URLSearchParams(location.search).get("t");
   let markdown = "";
 
   const status = (text, err = false) => { $("status").textContent = text; $("status").className = err ? "err" : ""; };
+  if (!token) {
+    ["json", "paste", "go"].forEach((id) => { $(id).disabled = true; });
+    status("🔒 Esta página es solo para el clan Otakus Laborales. Abre tu enlace personal con /aldea en nuestro Discord.", true);
+  }
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   // Markdown mínimo de Discord: `código`, **negrita**, _cursiva_ y saltos de línea.
   const render = (md) => esc(md)
@@ -96,7 +103,7 @@
     if (!text) return status("Primero pega el texto que copió el juego.", true);
     $("go").disabled = true; status("Analizando…");
     try {
-      const r = await fetch(API, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+      const r = await fetch(`${API}?t=${encodeURIComponent(token)}`, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "No se pudo analizar.");
       markdown = data.report;
