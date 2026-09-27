@@ -37,6 +37,9 @@
   #result { white-space: normal; overflow-wrap: anywhere; }
   #result code { font-family: ui-monospace, Consolas, monospace; color: var(--gold); letter-spacing: -1px; }
   .hidden { display: none; }
+  .sec { border-left: 5px solid var(--accent); padding: 14px 16px; }
+  .sec h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; color: var(--muted); font-size: .95rem; }
   footer { color: var(--muted); font-size: .85rem; text-align: center; margin-top: 24px; }
 </style>
 </head>
@@ -57,6 +60,7 @@
       <li>Vuelve aquí, pega el texto y pulsa <b>Analizar</b>.</li>
     </ol>
     <textarea id="json" placeholder='Pega aquí el texto que copió el juego (empieza con {"tag":...)' spellcheck="false"></textarea>
+    <label class="check"><input type="checkbox" id="share"> Publicar mi resumen en #📈-progreso</label>
     <div class="row">
       <button id="paste" class="secondary" type="button">📋 Pegar</button>
       <button id="go" type="button">🔍 Analizar</button>
@@ -64,14 +68,15 @@
     <div id="status" role="status"></div>
   </section>
 
-  <section id="out" class="card hidden">
+  <div id="out" class="hidden">
     <div id="result"></div>
     <div class="row">
-      <button id="copy" type="button">📤 Copiar para Discord</button>
+      <button id="copy" type="button">📤 Copiar todo para Discord</button>
     </div>
-  </section>
+  </div>
 
-  <footer>Tu aldea no se guarda: solo se analiza. Datos del juego: ClashKing.</footer>
+  <footer>El resultado te llega también por mensaje privado en Discord. Se guarda solo tu último análisis, para que el
+    liderazgo lo tenga en cuenta al armar la guerra. Datos del juego: ClashKing.</footer>
 </main>
 <script>
   const API = "https://yxfgxgndropdcmejqhan.supabase.co/functions/v1/aldea";
@@ -82,7 +87,7 @@
 
   const status = (text, err = false) => { $("status").textContent = text; $("status").className = err ? "err" : ""; };
   if (!token) {
-    ["json", "paste", "go"].forEach((id) => { $(id).disabled = true; });
+    ["json", "paste", "go", "share"].forEach((id) => { $(id).disabled = true; });
     status("🔒 Esta página es solo para el clan Otakus Laborales. Abre tu enlace personal con /aldea en nuestro Discord.", true);
   }
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -103,13 +108,18 @@
     if (!text) return status("Primero pega el texto que copió el juego.", true);
     $("go").disabled = true; status("Analizando…");
     try {
-      const r = await fetch(`${API}?t=${encodeURIComponent(token)}`, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+      const share = $("share").checked ? "&share=1" : "";
+      const r = await fetch(`${API}?t=${encodeURIComponent(token)}${share}`, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "No se pudo analizar.");
-      markdown = data.report;
-      $("result").innerHTML = render(markdown);
+      // Una tarjeta por área (resumen, héroes, investigación, defensas, economía, muros).
+      markdown = data.sections.map((s) => `**${s.title}**\n${s.text}`).join("\n\n");
+      $("result").innerHTML = data.sections.map((s) =>
+        `<section class="card sec" style="border-left-color:#${s.color.toString(16).padStart(6, "0")}">` +
+        `<h2>${esc(s.title)}</h2><div>${render(s.text)}</div></section>`).join("");
       $("out").classList.remove("hidden");
-      status("¡Listo!");
+      status("¡Listo!" + (data.dm ? " 📩 También te lo envié por mensaje privado en Discord." : "") +
+        (data.shared ? " 📢 Resumen publicado en #progreso." : ""));
       $("out").scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       status(e.message || "No se pudo conectar. Inténtalo de nuevo.", true);
